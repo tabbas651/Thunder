@@ -15,10 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+find_package(Threads REQUIRED)
+
 add_executable(fdpassing main.cpp)
 
 target_link_libraries(fdpassing PRIVATE
     CompileSettingsDebug::CompileSettingsDebug
+    Threads::Threads
     ${NAMESPACE}Core::${NAMESPACE}Core
     ${NAMESPACE}PrivilegedRequest::${NAMESPACE}PrivilegedRequest
 )

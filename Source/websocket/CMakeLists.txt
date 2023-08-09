@@ -25,6 +25,8 @@ add_library(${TARGET} ${THUNDER_LIBRARY_TYPE}
         JSONRPCLink.cpp
         )
 
+find_package(ZLIB REQUIRED)
+
 set(PUBLIC_HEADERS
         URL.h
         JSONWebToken.h
@@ -42,6 +44,9 @@ set(PUBLIC_HEADERS
 
 if (NOT BUILD_LIB_AS_STATIC)
         target_sources(${TARGET} PRIVATE Module.cpp)
+else ()
+        find_package(Threads REQUIRED)
+        find_package(LIBRT)
 endif()
 
 target_link_libraries(${TARGET}
