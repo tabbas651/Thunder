@@ -89,8 +89,12 @@ def EmitEvent(emit, root, event, params_type, legacy = False):
             if params.properties and params.do_create:
                 for p in event.params.properties:
                     emit.Line("%s.%s = %s;" % (params_var, p.cpp_name, p.local_name))
+                    if p.schema.get("opaque"):
+                        emit.Line("%s.%s.SetQuoted(false);" % (params_var, p.cpp_name))
             else:
                 emit.Line("%s = %s;" % (params_var, event.params.local_name))
+                if params.schema.get("opaque"):
+                    emit.Line("%s.SetQuoted(false);" % params_var)
 
             emit.Line()
 
@@ -186,20 +190,25 @@ def _EmitRpcPrologue(root, emit, header_file, source_file, data_emitted, prototy
         emit.Line("#endif // _IMPLEMENTATION_STUB")
 
     emit.Line()
-    emit.Line("#include \"Module.h\"")
 
-    if data_emitted:
-        emit.Line("#include \"%s_%s.h\"" % (config.DATA_NAMESPACE, header_file))
+    if not config.NO_INCLUDES:
+        emit.Line("#include \"Module.h\"")
 
-    if not json_source:
-        emit.Line("#include <%s%s>" % (config.CPP_INTERFACE_PATH, source_file))
+        if data_emitted:
+            emit.Line("#include \"%s_%s.h\"" % (config.DATA_NAMESPACE, header_file))
+
+        if not json_source:
+            emit.Line("#include <%s%s>" % (config.CPP_INTERFACE_PATH, source_file))
 
     emit.Line()
-    emit.Line("namespace %s {" % config.FRAMEWORK_NAMESPACE)
-    emit.Line()
-    emit.Line("namespace %s {" % "Exchange")
-    emit.Indent()
-    emit.Line()
+
+    for i, ns in enumerate(config.INTERFACE_NAMESPACE.split("::")):
+        if ns:
+            emit.Line("namespace %s {" % ns)
+            if i >= 2:
+                emit.Indent()
+            emit.Line()
+
     namespace = root.json_name
 
     if "info" in root.schema and "namespace" in root.schema["info"]:
@@ -223,10 +232,12 @@ def _EmitRpcEpilogue(root, emit):
         emit.Line("} // namespace %s" % root.schema["info"]["namespace"])
         emit.Line()
 
-    emit.Unindent()
-    emit.Line("} // namespace %s" % "Exchange")
-    emit.Line()
-    emit.Line("}")
+    for i, ns in reversed(list(enumerate(config.INTERFACE_NAMESPACE.split("::")))):
+        if ns:
+            if i >= 2:
+                emit.Unindent()
+            emit.Line("} // namespace %s" % ns)
+            emit.Line()
 
     emit.Line()
 
@@ -244,7 +255,13 @@ def _EmitVersionCode(emit, version):
 def _EmitRpcCode(root, emit, header_file, source_file, data_emitted):
     json_source = source_file.endswith(".json")
 
-    emit.Indent()
+    for i, ns in enumerate(config.INTERFACE_NAMESPACE.split("::")):
+        if ns and i >= 2:
+            emit.Indent()
+
+    if "info" in root.schema and "namespace" in root.schema["info"]:
+        emit.Indent()
+
     emit.Indent()
 
     _EmitVersionCode(emit, rpc_version.GetVersion(root.schema["info"] if "info" in root.schema else dict()))
@@ -419,9 +436,9 @@ def _EmitRpcCode(root, emit, header_file, source_file, data_emitted):
 
                         if is_readable:
                             if encode:
-                                emit.Line("Core::FromString(%s, %s, %s, nullptr);" % (cpp_name, arg.TempName(), length_var.TempName()))
+                                emit.Line("Core::FromString(%s, %s, %s, nullptr);" % (cpp_name, arg.TempName(), length.TempName()))
                             elif is_writeable:
-                                emit.Line("::memcpy(%s, %s.Value().data(), %s);" % (arg.TempName(), cpp_name, length_var.TempName()))
+                                emit.Line("::memcpy(%s, %s.Value().data(), %s);" % (arg.TempName(), cpp_name, length.TempName()))
 
                         if is_writeable or encode:
                             emit.Unindent()
@@ -611,6 +628,9 @@ def _EmitRpcCode(root, emit, header_file, source_file, data_emitted):
                         # All others...
                         else:
                             emit.Line("%s = %s;" % (cpp_name, arg.TempName()))
+
+                            if arg.schema.get("opaque"):
+                                emit.Line("%s.SetQuoted(false);" % (cpp_name))
 
                     emit.Unindent()
                     emit.Line("}")

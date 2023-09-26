@@ -100,7 +100,7 @@ class JsonType():
         self.schema = schema
         self.parent = parent
         self.name = name
-        self.original_name = schema.get("original_name")
+        self.original_name = schema.get("@originalname")
         self.description = schema.get("description")
         self.iterator = schema.get("iterator")
         self.original_type = schema.get("original_type")
@@ -485,7 +485,12 @@ class JsonObject(JsonRefCounted, JsonType):
             idx = 0
             for prop_name, prop in schema["properties"].items():
                 new_obj = JsonItem(prop_name, self, prop, included=included)
-                new_obj.schema["position"] = idx
+
+                # Use the declared parameter position only if the interface comes from a C++ header,
+                # otherwise order parameters as seen in the JSON meta file.
+                if ("@generated" not in self.root.schema) or ("position" not in new_obj.schema):
+                    new_obj.schema["position"] = idx
+
                 idx += 1
                 self._properties.append(new_obj)
 
@@ -671,9 +676,6 @@ class JsonMethod(JsonObject):
         if '.' in name:
             log.Warn("'%s': method names containing full designator are deprecated" % name)
             name = name.rsplit(".", 1)[1]
-        elif "original_name" in schema:
-            # In case of a method always take the original name if available
-            name = schema["original_name"].lower()
 
         # Mimic a JSON object to fit rest of the parsing...
         self.errors = schema["errors"] if "errors" in schema else OrderedDict()
@@ -682,8 +684,8 @@ class JsonMethod(JsonObject):
         props["result"] = schema["result"] if "result" in schema else {"type": "null"}
         method_schema = {"type": "object", "properties": props}
 
-        if "original_name" in schema:
-            method_schema["original_name"] = schema["original_name"]
+        if "@originalname" in schema:
+            method_schema["@originalname"] = schema["@originalname"]
 
         if "hint" in schema:
             method_schema["hint"] = schema["hint"]
@@ -959,7 +961,7 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
             return None
 
         # Tags all objects that used to be $references
-        if isinstance(schema, jsonref.JsonRef):
+        if isinstance(schema, jsonref.JsonRef) and isinstance(schema, dict):
             if "description" in schema.__reference__ or "example" in schema.__reference__ or "default" in schema.__reference__:
                 # Need a copy, there an override on one of the properites
                 if idx == None:
@@ -1014,7 +1016,7 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
 
                         if cpp_obj:
                             parent[parent_name] = copy.deepcopy(cpp_obj)
-                            parent[parent_name]["@ref"] = "@" + json_path + "/" + cpp_obj["original_name"]
+                            parent[parent_name]["@ref"] = "@" + json_path + "/" + cpp_obj["@originalname"]
 
                             if "description" in schema:
                                 parent[parent_name]["description"] = schema["description"]
@@ -1040,7 +1042,11 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
             def Scan(pairs):
                 for i, c in enumerate(pairs):
                     if isinstance(c, tuple):
+
                         k, v = c
+
+                        if k == "$cppref":
+                            k = "$ref"
 
                         if isinstance(v, list):
                             Scan(v)
@@ -1053,7 +1059,7 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
                                     ref_file = ref[0].replace("{interfacedir}", include_path)
 
                                     if os.path.exists(ref_file):
-                                        pairs[i] = (k, ("file:" + ref_file + "#" + ref[1]))
+                                        pairs[i] = (k, os.path.normpath("file://" + ref_file + "#" + ref[1]))
                                     else:
                                         raise IOError("$ref file '%s' not found" % ref_file)
                                 else:
@@ -1062,7 +1068,7 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
                                     if not os.path.exists(ref_file):
                                         ref_file = v
                                     else:
-                                        pairs[i] = (k, ("file:" + ref_file + "#" + ref[1]))
+                                        pairs[i] = (k, os.path.normpath("file://" + ref_file + "#" + ref[1]))
 
                             elif v.endswith(".h") or v.endswith(".h#"):
                                 ref_file = v.replace("#", "")
@@ -1079,7 +1085,7 @@ def LoadSchema(file, include_path, cpp_include_path, header_include_paths):
 
                                         with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_json_file:
                                             temp_json_file.write(json.dumps(cppif))
-                                            pairs[i] = (k, "file:" + temp_json_file.name)
+                                            pairs[i] = (k, os.path.normpath("file://" + temp_json_file.name + "#"))
                                             temp_files.append(temp_json_file.name)
                                 else:
                                     raise IOError("$ref file '%s' not found" % ref_file)

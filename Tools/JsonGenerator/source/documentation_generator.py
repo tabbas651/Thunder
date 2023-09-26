@@ -95,7 +95,7 @@ def Create(log, schema, path, indent_size = 4):
                             "required" in parent
                             and name not in parent["required"]) or ("required" in parent and len(parent["required"]) == 0)
 
-                name = (name if not "original_name" in obj else obj["original_name"].lower())
+                name = (name if not "@originalname" in obj else obj["@originalname"].lower())
 
                 # include information about enum values in description
                 enum = ' (must be one of the following: %s)' % (", ".join(
@@ -127,14 +127,14 @@ def Create(log, schema, path, indent_size = 4):
                     if optional and "default" in obj:
                         row += " (default: " + (italics("%s") % str(obj["default"]) + ")")
 
-                    MdRow([prefix, obj["type"], row])
+                    MdRow([prefix, "opaque object" if obj.get("opaque") else obj["type"], row])
 
                 if obj["type"] == "object":
                     if "required" not in obj and name and len(obj["properties"]) > 1:
                         log.Warn("'%s': no 'required' field present (assuming all members optional)" % name)
 
                     for pname, props in obj["properties"].items():
-                        _TableObj(pname, props, parentName + "/" + (name if not "original_name" in props else props["original_name"].lower()), obj, prefix, False)
+                        _TableObj(pname, props, parentName + "/" + (name if not "@originalname" in props else props["@originalname"].lower()), obj, prefix, False)
                 elif obj["type"] == "array":
                     _TableObj("", obj["items"], parentName + "/" + name, obj, (prefix + "[#]") if name else "", optional)
 
@@ -171,7 +171,7 @@ def Create(log, schema, path, indent_size = 4):
             json_data = '"%s": ' % name if name else ''
 
             if obj_type == "string":
-                json_data += '"%s"' % (default if default else "...")
+                json_data += "{  }" if obj.get("opaque") else ('"%s"' % (default if default else "..."))
             elif obj_type in ["integer", "number"]:
                 json_data += '%s' % (default if default else 0)
             elif obj_type in ["float", "double"]:

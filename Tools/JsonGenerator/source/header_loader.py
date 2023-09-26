@@ -18,6 +18,7 @@
 import sys
 import os
 import json
+import copy
 import posixpath
 from collections import OrderedDict
 
@@ -31,15 +32,21 @@ import ProxyStubGenerator.Interface as CppInterface
 
 class CppParseError(RuntimeError):
     def __init__(self, obj, msg):
-        try:
-            msg = "%s(%s): %s (see '%s')" % (obj.parser_file, obj.parser_line, msg, obj.Proto())
+        if obj:
+            try:
+                msg = "%s(%s): %s (see '%s')" % (obj.parser_file, obj.parser_line, msg, obj.Proto())
+                super(CppParseError, self).__init__(msg)
+            except:
+                super(CppParseError, self).__init__("unknown parsing failure: %s(%i): %s" % (obj.parser_file, obj.parser_line, msg))
+        else:
             super(CppParseError, self).__init__(msg)
-        except:
-            super(CppParseError, self).__init__("unknown parsing failure: %s(%i): %s" % (obj.parser_file, obj.parser_line, msg))
 
 def LoadInterface(file, log, all = False, includePaths = []):
-    tree = CppParser.ParseFiles([os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                posixpath.normpath(config.DEFAULT_DEFINITIONS_FILE)), file], includePaths, log)
+    try:
+        tree = CppParser.ParseFiles([os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                    posixpath.normpath(config.DEFAULT_DEFINITIONS_FILE)), file], includePaths, log)
+    except CppParser.ParserError as ex:
+        raise CppParseError(None, str(ex))
 
     interfaces = [i for i in CppInterface.FindInterfaceClasses(tree, config.INTERFACE_NAMESPACE, file) if (i.obj.is_json or (all and not i.obj.is_event))]
 
@@ -166,7 +173,10 @@ def LoadInterface(file, log, all = False, includePaths = []):
 
                     # String
                     if isinstance(cppType, CppParser.String):
-                        result = [ "string", {} ]
+                        if "opaque" in var.meta.decorators :
+                            result = [ "string", { "opaque": True } ]
+                        else:
+                            result = [ "string", {} ]
                     # Boolean
                     elif isinstance(cppType, CppParser.Bool):
                         result = ["boolean", {} ]
@@ -220,7 +230,7 @@ def LoadInterface(file, log, all = False, includePaths = []):
                                     properties[name]["original_type"] = StripFrameworkNamespace(p.type.Type().full_name)
                                 else:
                                     properties[name] = ConvertParameter(p)
-                                properties[name]["original_name"] = p.name
+                                properties[name]["@originalname"] = p.name
 
                             return "object", { "properties": properties, "required": list(properties.keys()) }
 
@@ -319,7 +329,7 @@ def LoadInterface(file, log, all = False, includePaths = []):
                         properties[var_name] = ConvertParameter(var)
 
                         if not is_property and not var.name.startswith("@_") and not var.name.startswith("__unnamed"):
-                            properties[var_name]["original_name"] = var.name
+                            properties[var_name]["@originalname"] = var.name
 
                         properties[var_name]["position"] = vars.index(var)
 
@@ -374,7 +384,7 @@ def LoadInterface(file, log, all = False, includePaths = []):
                         properties[var_name] = ConvertParameter(var)
 
                         if not is_property and not var.name.startswith("@_") and not var.name.startswith("__unnamed"):
-                           properties[var_name]["original_name"] = var.name
+                           properties[var_name]["@originalname"] = var.name
 
                         properties[var_name]["position"] = vars.index(var)
                         required.append(var_name)
@@ -391,14 +401,17 @@ def LoadInterface(file, log, all = False, includePaths = []):
                     void["description"] = "Always null"
                     return void
 
+            event_params = EventParameters(method.vars)
+
             if method.is_excluded:
+                if event_params:
+                    log.WarnLine(method, "'%s()': @json:omit is redundant for notification registration methods" % method.name)
+
                 continue
 
             prefix = (face.obj.parent.name.lower() + "_") if face.obj.parent.full_name != config.INTERFACE_NAMESPACE else ""
             method_name = method.retval.meta.text if method.retval.meta.text else method.name
             method_name_lower = method_name.lower()
-
-            event_params = EventParameters(method.vars)
 
             for e in event_params:
                 exists = any(x.obj.type == e.type.type for x in event_interfaces)
@@ -411,11 +424,11 @@ def LoadInterface(file, log, all = False, includePaths = []):
             if method.retval.meta.is_property or (prefix + method_name_lower) in properties:
                 try:
                     obj = properties[prefix + method_name_lower]
-                    obj["original_name"] = method.name
                 except:
                     obj = OrderedDict()
-                    obj["original_name"] = method.name
                     properties[prefix + method_name_lower] = obj
+
+                obj["@originalname"] = method.name
 
                 indexed_property = (len(method.vars) == 2 and method.vars[0].meta.is_index)
 
@@ -523,9 +536,13 @@ def LoadInterface(file, log, all = False, includePaths = []):
                 else:
                     raise CppParseError(method, "property method must have one parameter")
 
-            elif method.IsPureVirtual() and not event_params:
-                if method.retval.type and ((isinstance(method.retval.type.Type(), CppParser.Integer) and (method.retval.type.Type().size == "long")) or not verify):
+            elif method.IsVirtual() and not event_params:
+                var_type = ResolveTypedef(method.retval.type)
+
+                if var_type and ((isinstance(var_type.Type(), CppParser.Integer) and (var_type.Type().size == "long")) or not verify):
                     obj = OrderedDict()
+                    obj["@originalname"] = method.name
+
                     params = BuildParameters(method.vars, rpc_format)
 
                     if params:
@@ -536,8 +553,11 @@ def LoadInterface(file, log, all = False, includePaths = []):
                                 raise CppParseError(method, "parameters must not use the same name as the method")
 
                     obj["result"] = BuildResult(method.vars)
-                    obj["original_name"] = method_name
                     methods[prefix + method_name_lower] = obj
+
+                    if method.retval.meta.alt:
+                        methods[prefix + method.retval.meta.alt] = copy.deepcopy(obj)
+                        methods[prefix + method.retval.meta.alt]["deprecated"] = True
                 else:
                     raise CppParseError(method, "method return type must be uint32_t (error code), i.e. pass other return values by a reference")
 
@@ -571,9 +591,9 @@ def LoadInterface(file, log, all = False, includePaths = []):
             for method in f.obj.methods:
                 EventParameters(method.vars) # just to check for undefined types...
 
-                if method.IsPureVirtual() and method.is_excluded == False:
+                if method.IsVirtual() and method.is_excluded == False:
                     obj = OrderedDict()
-                    obj["original_name"] = method.name
+                    obj["@originalname"] = method.name
                     varsidx = 0
 
                     if len(method.vars) > 0:
