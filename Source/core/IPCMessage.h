@@ -248,7 +248,7 @@ namespace Core {
             uint16_t _length;
         };
 
-        template <const uint16_t LENGTH>
+        template <const uint32_t LENGTH>
         class BufferType {
         public:
             BufferType(const BufferType<LENGTH>& copy) = delete;
@@ -258,10 +258,13 @@ namespace Core {
                 : _buffer()
             {
             }
-            inline BufferType(const uint16_t length, const uint8_t buffer[])
-                : _buffer()
+            inline BufferType(const uint16_t length)
+                : _buffer(length)
             {
-                _buffer.SetBufferType(0, length, buffer);
+            }
+            inline BufferType(const uint16_t length, const uint8_t buffer[])
+                : _buffer(buffer, length)
+            {
             }
             inline ~BufferType()
             {

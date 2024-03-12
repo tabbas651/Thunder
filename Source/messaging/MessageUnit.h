@@ -37,7 +37,7 @@ namespace WPEFramework {
         */
         class EXTERNAL MessageUnit : public Core::Messaging::IStore {
         public:
-            static constexpr uint32_t MetadataSize = 10 * 1024;
+            static constexpr uint32_t MaxMetadataSize = 10 * 1024;
             static constexpr uint32_t DataSize = 20 * 1024;
 
             enum flush : uint8_t {
@@ -45,6 +45,20 @@ namespace WPEFramework {
                 FLUSH              = 1,
                 FLUSH_ABBREVIATED  = 2
             };
+
+            class EXTERNAL Buffer : public Core::IPC::BufferType<static_cast<uint32_t>(~0)> {
+            public:
+                Buffer()
+                    : Core::IPC::BufferType<static_cast<uint32_t>(~0)>(MessageUnit::Instance().MetadataBufferSize())
+                {
+                }
+                ~Buffer() = default;
+
+                Buffer(const Buffer&) = delete;
+                Buffer& operator=(const Buffer&) = delete;
+            };
+
+            using MetadataFrame = Core::IPCMessageType<1, Buffer, Buffer>;
 
             /**
              * @brief Class responsible for maintaining the state of a specific Message module/category known to
@@ -398,6 +412,10 @@ namespace WPEFramework {
                     return (_socketPort);
                 }
 
+                uint32_t MetadataBufferSize() const {
+                    return (MaxMetadataSize); // TODO: take from config
+                }
+
                 uint16_t Permission() const {
                     return (_permission);
                 }
@@ -649,9 +667,9 @@ namespace WPEFramework {
                 uint8_t _mode;
             };
 
-            class EXTERNAL Client : public MessageDataBufferType<DataSize, MetadataSize> {
+            class EXTERNAL Client : public MessageDataBufferType<DataSize> {
             private:
-                using BaseClass = MessageDataBufferType<DataSize, MetadataSize>;
+                using BaseClass = MessageDataBufferType<DataSize>;
 
             public:
                 Client() = delete;
@@ -659,8 +677,8 @@ namespace WPEFramework {
                 Client& operator= (const Client&) = delete;
 
                 Client(const string& identifier, const uint32_t instanceId, const string& baseDirectory, const uint16_t socketPort = 0)
-                    : MessageDataBufferType < DataSize, MetadataSize>(identifier, instanceId, baseDirectory, socketPort, false)
-                    , _channel(Core::NodeId(MetadataName().c_str()), MetadataSize) {
+                    : MessageDataBufferType<DataSize>(identifier, instanceId, baseDirectory, socketPort, false)
+                    , _channel(Core::NodeId(MetadataName().c_str()), MessageUnit::Instance().MetadataBufferSize()) {
                     _channel.Open(Core::infinite);
                 }
                 ~Client() {
@@ -687,11 +705,11 @@ namespace WPEFramework {
 
                     if (_channel.IsOpen() == true) {
 
-                        uint8_t dataBuffer[MetadataSize];
+                        uint8_t dataBuffer[MaxMetadataSize];
 
                         // We got a connection to the spawned process side, get the list of traces from
                         // there and send our settings from here...
-                        Core::ProxyType<BaseClass::MetadataFrame> metaDataFrame(Core::ProxyType<BaseClass::MetadataFrame>::Create());
+                        Core::ProxyType<MetadataFrame> metaDataFrame(Core::ProxyType<MetadataFrame>::Create());
                         Control message(control, enabled);
                         uint16_t length = message.Serialize(dataBuffer, sizeof(dataBuffer));
                         metaDataFrame->Parameters().Set(length, dataBuffer);
@@ -708,7 +726,7 @@ namespace WPEFramework {
 
                         // We got a connection to the spawned process side, get the list of traces from
                         // there and send our settings from here...
-                        Core::ProxyType<BaseClass::MetadataFrame> metaDataFrame(Core::ProxyType<BaseClass::MetadataFrame>::Create());
+                        Core::ProxyType<MetadataFrame> metaDataFrame(Core::ProxyType<MetadataFrame>::Create());
 
                         metaDataFrame->Parameters().Set(0, nullptr);
 
@@ -750,9 +768,9 @@ namespace WPEFramework {
             using Factories = std::unordered_map<Core::Messaging::Metadata::type, IEventFactory*>;
 
             // This is the listening end-point, and it is created as the master in which we push messages
-            class MessageDispatcher : public MessageDataBufferType<DataSize, MetadataSize> {
+            class MessageDispatcher : public MessageDataBufferType<DataSize> {
             private:
-                using BaseClass = MessageDataBufferType<DataSize, MetadataSize>;
+                using BaseClass = MessageDataBufferType<DataSize>;
                 class MetaDataBuffer : public Core::IPCChannelClientType<Core::Void, true, true> {
                 private:
                     using BaseClass = Core::IPCChannelClientType<Core::Void, true, true>;
@@ -771,7 +789,7 @@ namespace WPEFramework {
                     public:
                         void Procedure(Core::IPCChannel& source, Core::ProxyType<Core::IIPC>& data) override
                         {
-                            uint8_t outBuffer[MetadataSize];
+                            uint8_t outBuffer[MaxMetadataSize];
 
                             auto message = Core::ProxyType<MetadataFrame>(data);
 
@@ -798,8 +816,8 @@ namespace WPEFramework {
                     MetaDataBuffer(const MetaDataBuffer&) = delete;
                     MetaDataBuffer& operator=(const MetaDataBuffer&) = delete;
 
-                    MetaDataBuffer(MessageUnit& parent, const string& binding)
-                        : BaseClass(Core::NodeId(binding.c_str()), MetadataSize)
+                    MetaDataBuffer(MessageUnit& parent, const string& binding, const uint32_t metadataSize)
+                        : BaseClass(Core::NodeId(binding.c_str()), metadataSize)
                         , _handler(parent)
                     {
                         _handler.AddRef();
@@ -833,12 +851,13 @@ namespace WPEFramework {
                  * @param baseDirectory where to place all the necessary files. This directory should exist before creating this class.
                  * @param socketPort triggers the use of using a IP socket in stead of a domain socket if the port value is not 0.
                  */
-                MessageDispatcher(MessageUnit& parent, const string& identifier, const uint32_t instanceId, const string& basePath, const uint16_t socketPort)
+                MessageDispatcher(MessageUnit& parent, const string& identifier, const uint32_t instanceId, const string& basePath, 
+                        const uint32_t metadataSize, const uint16_t socketPort)
                     : BaseClass(identifier, instanceId, basePath, socketPort, true)
-                    , _metaDataBuffer(parent, BaseClass::MetadataName())
+                    , _metaDataBuffer(parent, BaseClass::MetadataName(), metadataSize)
                 {
                 }
-                virtual ~MessageDispatcher() = default;
+                ~MessageDispatcher() = default;
 
             public:
                 bool IsValid() const {
@@ -880,6 +899,10 @@ namespace WPEFramework {
 
             uint16_t SocketPort() const {
                 return (_settings.SocketPort());
+            }
+
+            uint32_t MetadataBufferSize() const {
+                return (_settings.MetadataBufferSize());
             }
 
             uint32_t Open(const string& pathName, const Settings::Config& configuration, const bool background, const flush flushMode);

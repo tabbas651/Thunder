@@ -108,33 +108,35 @@ namespace Core {
         public:
             AllocatorType<STARTSIZE, SIZETYPE> operator=(const AllocatorType<STARTSIZE, SIZETYPE>&) = delete;
 
-            AllocatorType()
+            template <uint32_t D = STARTSIZE>
+            AllocatorType(const SIZETYPE bufferSize, typename std::enable_if<D == static_cast<uint32_t>(~0), int>::type = 0)
+                : _bufferSize(bufferSize)
+                , _data(reinterpret_cast<uint8_t*>(::malloc(_bufferSize)))
+            {
+                ASSERT((_data != nullptr) || (_bufferSize == 0));
+            }
+            template <uint32_t D = STARTSIZE>
+            AllocatorType(typename std::enable_if<(D != 0) && (D != static_cast<uint32_t>(~0)), int>::type = 0)
                 : _bufferSize(STARTSIZE)
                 , _data(reinterpret_cast<uint8_t*>(::malloc(_bufferSize)))
             {
-                // It looks like there is a bug in the windows compiler. It prepares a default/copy constructor
-                // if if the template being instantiated is not really utilizing it!
-                #ifndef __WINDOWS__
-                static_assert(STARTSIZE != 0, "This method can only be called if you specify an initial blocksize");
-                #endif
+                ASSERT(_data != nullptr);
             }
-            AllocatorType(const AllocatorType<STARTSIZE, SIZETYPE>& copy)
+            template <uint32_t D = STARTSIZE>
+            AllocatorType(const AllocatorType<STARTSIZE, SIZETYPE>& copy,
+                          typename std::enable_if<(D != 0) && (D != static_cast<uint32_t>(~0)), int>::type = 0)
                 : _bufferSize(copy._bufferSize)
                 , _data(reinterpret_cast<uint8_t*>(::malloc(_bufferSize)))
             {
-                // It looks like there is a bug in the windows compiler. It prepares a default/copy constructor
-                // if if the template being instantiated is not really utilizing it!
-                #ifndef __WINDOWS__
-                static_assert(STARTSIZE != 0, "This method can only be called if you specify an initial blocksize");
-                #endif
-
+                ASSERT(_data != nullptr);
                 ::memcpy(_data, copy._data, _bufferSize);
             }
-            AllocatorType(uint8_t buffer[], const SIZETYPE length)
+            template <uint32_t D = STARTSIZE>
+            AllocatorType(uint8_t buffer[], const SIZETYPE length,
+                          typename std::enable_if<(D == 0), int>::type = 0)
                 : _bufferSize(length)
                 , _data(buffer)
             {
-                static_assert(STARTSIZE == 0, "This method can only be called if you specify an initial blocksize of 0");
             }
             ~AllocatorType()
             {
@@ -426,6 +428,15 @@ namespace Core {
             // if if the template being instantiated is not really utilizing it!
             #ifndef __WINDOWS__
             static_assert(BLOCKSIZE != 0, "This method can only be called if you specify an initial blocksize");
+            #endif
+        }
+        FrameType(const SIZE_CONTEXT length)
+            : _size(0)
+            , _data(length) {
+            // It looks like there is a bug in the windows compiler. It prepares a default/copy constructor
+            // if if the template being instantiated is not really utilizing it!
+            #ifndef __WINDOWS__
+            static_assert(BLOCKSIZE == static_cast<uint32_t>(~0), "This method can only be called if you specify a runtime-defined blocksize");
             #endif
         }
         FrameType(const FrameType<BLOCKSIZE, BIG_ENDIAN_ORDERING, SIZE_CONTEXT>& copy)

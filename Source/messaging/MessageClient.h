@@ -67,7 +67,6 @@ namespace Messaging {
         const uint16_t _socketPort;
 
         mutable uint8_t _readBuffer[Messaging::MessageUnit::DataSize];
-        mutable uint8_t _writeBuffer[Messaging::MessageUnit::MetadataSize];
 
         Clients _clients;
         Factories _factories;

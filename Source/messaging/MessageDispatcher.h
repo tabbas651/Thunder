@@ -25,7 +25,7 @@ namespace WPEFramework {
 
 namespace Messaging {
 
-    template <const uint16_t DATA_BUFFER_SIZE, const uint16_t METADATA_SIZE>
+    template <const uint16_t DATA_BUFFER_SIZE>
     class MessageDataBufferType {
     private:
         /**
@@ -104,8 +104,6 @@ namespace Messaging {
         };
 
     public:
-        using MetadataFrame = Core::IPCMessageType<1, Core::IPC::BufferType<METADATA_SIZE>, Core::IPC::BufferType<METADATA_SIZE>>;
-
         MessageDataBufferType(const MessageDataBufferType&) = delete;
         MessageDataBufferType& operator=(const MessageDataBufferType&) = delete;
 
