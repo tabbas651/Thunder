@@ -357,14 +357,14 @@ namespace PluginHost {
             const string className(PluginHost::Service::Configuration().ClassName.Value());
 
             if (_handler == nullptr) {
-                SYSLOG(Logging::Startup, (_T("Loading of plugin [%s]:[%s], failed. Error [%s]"), className.c_str(), callSign.c_str(), ErrorMessage().c_str()));
+                SYSLOG(Logging::Activate, (_T("Loading of plugin [%s]:[%s], failed. Error [%s]"), className.c_str(), callSign.c_str(), ErrorMessage().c_str()));
                 result = Core::ERROR_UNAVAILABLE;
 
                 Unlock();
 
                 // See if the preconditions have been met..
             } else if (_precondition.IsMet() == false) {
-                SYSLOG(Logging::Startup, (_T("Activation of plugin [%s]:[%s], postponed, preconditions have not been met, yet."), className.c_str(), callSign.c_str()));
+                SYSLOG(Logging::Activate, (_T("Activation of plugin [%s]:[%s], postponed, preconditions have not been met, yet."), className.c_str(), callSign.c_str()));
                 result = Core::ERROR_PENDING_CONDITIONS;
                 _reason = why;
                 State(PRECONDITION);
@@ -414,7 +414,7 @@ namespace PluginHost {
                 if (HasError() == true) {
                     result = Core::ERROR_GENERAL;
 
-                    SYSLOG(Logging::Startup, (_T("Activation of plugin [%s]:[%s], failed. Error [%s]"), className.c_str(), callSign.c_str(), ErrorMessage().c_str()));
+                    SYSLOG(Logging::Activate, (_T("Activation of plugin [%s]:[%s], failed. Error [%s]"), className.c_str(), callSign.c_str(), ErrorMessage().c_str()));
 
                     if( _administrator.Configuration().LegacyInitialize() == false ) {
                         Deactivate(reason::INITIALIZATION_FAILED);
@@ -445,7 +445,7 @@ namespace PluginHost {
                         }
                     }
 
-                    SYSLOG(Logging::Startup, (_T("Activated plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
+                    SYSLOG(Logging::Activate, (_T("Activated plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
                     Lock();
                     State(ACTIVATED);
                     _administrator.Activated(callSign, this);
@@ -587,7 +587,7 @@ namespace PluginHost {
                 }
 
                 if (currentState != IShell::state::ACTIVATION) {
-                    SYSLOG(Logging::Shutdown, (_T("Deactivated plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
+                    SYSLOG(Logging::Deactivate, (_T("Deactivated plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
 
     #if THUNDER_RESTFULL_API
                     _administrator.Notification(_T("{\"callsign\":\"") + callSign + _T("\",\"state\":\"deactivated\",\"reason\":\"") + textReason.Data() + _T("\"}"));
@@ -673,7 +673,7 @@ namespace PluginHost {
 
             _reason = why;
 
-            SYSLOG(Logging::Shutdown, (_T("Unavailable plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
+            SYSLOG(Logging::Deactivate, (_T("Unavailable plugin [%s]:[%s]"), className.c_str(), callSign.c_str()));
 
             TRACE(Activity, (Core::Format(_T("Unavailable plugin [%s]:[%s]"), className.c_str(), callSign.c_str())));
 
@@ -724,7 +724,7 @@ namespace PluginHost {
                 result = HibernateProcess(timeout, parentPID, _administrator.Configuration().HibernateLocator().c_str(), _T(""), &_hibernateStorage);
                 Lock();
                 if (State() != IShell::HIBERNATED) {
-                    SYSLOG(Logging::Startup, (_T("Hibernation aborted of plugin [%s] process [%u]"), Callsign().c_str(), parentPID));
+                    SYSLOG(Logging::Hibernate, (_T("Hibernation aborted of plugin [%s] process [%u]"), Callsign().c_str(), parentPID));
                     result = Core::ERROR_ABORTED;
                 }
                 Unlock();
@@ -746,16 +746,16 @@ namespace PluginHost {
 #endif
                 if (result == Core::ERROR_NONE) {
                     if (State() == IShell::state::HIBERNATED) {
-                        SYSLOG(Logging::Startup, ("Hibernated plugin [%s]:[%s]", ClassName().c_str(), Callsign().c_str()));
+                        SYSLOG(Logging::Hibernate, ("Hibernated plugin [%s]:[%s]", ClassName().c_str(), Callsign().c_str()));
                     } else {
                         // wakeup occured right after hibernation finished
-                        SYSLOG(Logging::Startup, ("Hibernation aborted of plugin [%s]:[%s]", ClassName().c_str(), Callsign().c_str()));
+                        SYSLOG(Logging::Hibernate, ("Hibernation aborted of plugin [%s]:[%s]", ClassName().c_str(), Callsign().c_str()));
                         result = Core::ERROR_ABORTED;
                     }
                 }
                 else if (State() == IShell::state::HIBERNATED) {
                     State(IShell::ACTIVATED);
-                    SYSLOG(Logging::Startup, (_T("Hibernation error [%d] of [%s]:[%s]"), result, ClassName().c_str(), Callsign().c_str()));
+                    SYSLOG(Logging::Hibernate, (_T("Hibernation error [%d] of [%s]:[%s]"), result, ClassName().c_str(), Callsign().c_str()));
                 }
             }
         }
@@ -796,7 +796,7 @@ namespace PluginHost {
 #endif
                 if (result == Core::ERROR_NONE) {
                     State(ACTIVATED);
-                    SYSLOG(Logging::Startup, (_T("Activated plugin from hibernation [%s]:[%s]"), ClassName().c_str(), Callsign().c_str()));
+                    SYSLOG(Logging::Activate, (_T("Activated plugin from hibernation [%s]:[%s]"), ClassName().c_str(), Callsign().c_str()));
                 }
                 local->Release();
             }
@@ -822,7 +822,7 @@ namespace PluginHost {
                 TRACE(Activity, (_T("Hibernation of plugin [%s] child process [%u]"), Callsign().c_str(), *iter));
                 Lock();
                 if (State() != IShell::HIBERNATED) {
-                    SYSLOG(Logging::Startup, (_T("Hibernation aborted of plugin [%s] child process [%u]"), Callsign().c_str(), *iter));
+                    SYSLOG(Logging::Hibernate, (_T("Hibernation aborted of plugin [%s] child process [%u]"), Callsign().c_str(), *iter));
                     result = Core::ERROR_ABORTED;
                     Unlock();
                     break;

@@ -160,9 +160,9 @@ TEST_F(Core_Messaging_MessageUnit, TraceMessagesAreDisabledWhenModuleNotSpecifie
 TEST_F(Core_Messaging_MessageUnit, LoggingMessageIsEnabledIfNotConfigured)
 {
     //logging messages are enabled by default (if not specified otherwise in the config)
-    const string config = R"({"logging":{"messages":[{"category":"Startup","module":"SysLog","enabled":false}]}})";
+    const string config = R"({"logging":{"messages":[{"category":"Activate","module":"SysLog","enabled":false}]}})";
     Core::Messaging::MessageUnit::Instance().Defaults(config);
-    ASSERT_FALSE(Core::Messaging::MessageUnit::Instance().IsEnabledByDefault({ Core::Messaging::MetaData::MessageType::LOGGING, _T("Startup"), _T("SysLog") }));
+    ASSERT_FALSE(Core::Messaging::MessageUnit::Instance().IsEnabledByDefault({ Core::Messaging::MetaData::MessageType::LOGGING, _T("Activate"), _T("SysLog") }));
     ASSERT_TRUE(Core::Messaging::MessageUnit::Instance().IsEnabledByDefault({ Core::Messaging::MetaData::MessageType::LOGGING, _T("Notification"), _T("SysLog") }));
 }
 
