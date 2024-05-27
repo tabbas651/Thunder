@@ -17,6 +17,10 @@
 
 cmake_minimum_required(VERSION 3.3)
 
+if(MIGRATION_CHECK)
+set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_SOURCE_DIR}/cmake/NamespaceMigration/PlatformInformationOverrule.cmake)
+endif()
+
 project(WPEFramework)
 
 set(VERSION_MAJOR 1)
@@ -139,3 +143,6 @@ add_subdirectory(Source)
 
 add_subdirectory(Tests)
 
+if(MIGRATION_CHECK)
+include(${CMAKE_SOURCE_DIR}/cmake/NamespaceMigration/WPEFrameworkThunderNamespaceMigration.cmake)
+endif()
