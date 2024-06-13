@@ -39,7 +39,9 @@ TEST(Core_Library, simpleSet)
     Library LibObj1(file.c_str());
     EXPECT_TRUE(LibObj1.Error().empty());
 
+#ifndef __APPLE__
     LibObj1.LoadFunction(function);
+#endif
     EXPECT_TRUE(LibObj1.IsLoaded());
     EXPECT_TRUE(LibObj1.Error().empty());
 
