@@ -2039,7 +2039,7 @@ namespace Tests {
         ~SmallTest2() override = default;
 
     public:
-        void Clear()
+        void Clear() override
         {
             Core::JSON::Container::Clear();
         }
@@ -2142,7 +2142,7 @@ namespace Tests {
 
         ~CommandRequest() override = default;
 
-        void Clear()
+        void Clear() override
         {
             Thunder::Core::JSON::Container::Clear();
         }
