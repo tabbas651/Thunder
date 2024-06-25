@@ -36,7 +36,7 @@ namespace ProcessContainers {
         return dobbyContainerAdministrator;
     }
 
-    IContainer* DobbyContainerAdministrator::Container(const string& id, IStringIterator& searchpaths, const string& logpath, const string& configuration)
+    IContainer* DobbyContainerAdministrator::Container(const string& id, IStringIterator& searchpaths, const string& logpath, const string& configuration VARIABLE_IS_NOT_USED)
     {
         searchpaths.Reset(0);
         while (searchpaths.Next()) {
@@ -97,7 +97,7 @@ namespace ProcessContainers {
     {
     }
 
-    void DobbyContainerAdministrator::Logging(const string& logPath, const string& loggingOptions)
+    void DobbyContainerAdministrator::Logging(const string& logPath VARIABLE_IS_NOT_USED, const string& loggingOptions VARIABLE_IS_NOT_USED)
     {
         // Only container-scope logging
     }
@@ -173,7 +173,7 @@ namespace ProcessContainers {
         return result;
     }
 
-    void DobbyContainerAdministrator::containerStopCallback(int32_t cd, const std::string& containerId,
+    void DobbyContainerAdministrator::containerStopCallback(int32_t cd VARIABLE_IS_NOT_USED, const std::string& containerId,
         IDobbyProxyEvents::ContainerState state,
         const void* params)
     {
@@ -389,7 +389,7 @@ namespace ProcessContainers {
         return result;
     }
 
-    bool DobbyContainer::Stop(const uint32_t timeout /*ms*/)
+    bool DobbyContainer::Stop(const uint32_t timeout /*ms*/VARIABLE_IS_NOT_USED)
     {
         // TODO: add timeout support
         bool result = false;
